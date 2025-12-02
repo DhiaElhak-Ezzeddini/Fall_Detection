@@ -1,0 +1,5 @@
+Dataset/
+processed_keypoints_yolo/
+Working_Directory/
+__pycache__/
+*.pyc
