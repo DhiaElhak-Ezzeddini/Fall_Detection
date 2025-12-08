@@ -2,8 +2,8 @@ import cv2
 import numpy as np
 
 # ---- Input / Output ----
-input_path  = './Dataset/Fall/Raw_Video/S_M_81.mp4'
-output_path = "output_test_3_flow.mp4"
+input_path  = './Processed_Data/Fall/20240912_101331.mp4'
+output_path = "output_test_6_flow.mp4"
 
 cap = cv2.VideoCapture(input_path)
 
@@ -64,8 +64,8 @@ while True:
     out.write(vis)
 
     # ===== 4. Display (optional) =====
-    #cv2.imshow("Foreground Mask", fgmask)
-    cv2.imshow("Optical Flow on FG", vis)
+    cv2.imshow("Foreground Mask", fgmask)
+    #cv2.imshow("Optical Flow on FG", vis)
 
     prev_gray = gray
 
