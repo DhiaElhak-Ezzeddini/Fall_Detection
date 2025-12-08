@@ -2,8 +2,8 @@ import cv2
 import numpy as np
 
 # ---- Input / Output ----
-input_path  = './Dataset/Fall/Raw_Video/S_M_81.mp4'
-output_path = "output_test_flow.mp4"
+input_path  = './Processed_Data/Fall/S_M_81.mp4'
+output_path = "output_test_5_flow.mp4"
 
 cap = cv2.VideoCapture(input_path)
 
