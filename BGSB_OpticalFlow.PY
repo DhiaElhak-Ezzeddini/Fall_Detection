@@ -1,19 +1,20 @@
 import cv2
 import numpy as np
 import os
+import sys
 
 # ---- Paths ----
-Dataset_path = './Dataset/'
-Fall = os.path.join(Dataset_path, "Fall/Raw_Video/")
-output_dir = './Processed_Data/Fall'
+data = sys.argv[1] if len(sys.argv) > 1 else "Fall"
+Dataset_path = './Processed_Data/' + data
+output_dir = f'./Processed_For_DL/' + data
 output_dir_fg = os.path.join(output_dir, "fg")
 output_dir_flow = os.path.join(output_dir, "flow")
 
 os.makedirs(output_dir, exist_ok=True)
 os.makedirs(output_dir_fg, exist_ok=True)
 os.makedirs(output_dir_flow, exist_ok=True) 
-for path in os.listdir(Fall):
-    video_path = os.path.join(Fall, path)
+for path in os.listdir(os.path.join(Dataset_path)):
+    video_path = os.path.join(Dataset_path, path)
     cap = cv2.VideoCapture(video_path)
 
     # Check input
