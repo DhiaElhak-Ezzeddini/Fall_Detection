@@ -16,6 +16,13 @@ import json
 from sklearn.metrics import roc_curve, auc, precision_recall_fscore_support, confusion_matrix, classification_report # type: ignore
 import matplotlib.pyplot as plt
 
+def horizental_flip(fg, flow):
+    """Horizontally flip fg and flow data."""
+    fg_flipped = np.flip(fg, axis=-1).copy()  # flip width axis
+    flow_flipped = np.flip(flow, axis=-1).copy()  # flip width axis
+    flow_flipped[:,0,:,:] *= -1  # invert x-direction flow
+    return fg_flipped, flow_flipped
+
 class FGFLOWDataset(Dataset):
     """
     Dataset for loading foreground masks and optical flow data.
@@ -35,7 +42,17 @@ class FGFLOWDataset(Dataset):
         self.transform = transform
 
         # Only use stems that are in the labels dict
-        self.stems = list(labels.keys())
+        #self.stems = list(labels.keys())
+
+        self.transform = transform
+        self.stems = []
+        self.transform_flags = []
+        for stem in labels.keys():
+            self.stems.append(stem)
+            self.transform_flags.append(False)  # original
+            if self.transform and random.random() < 0.5: 
+                self.stems.append(stem)
+                self.transform_flags.append(True)   # augmented    
         
         print(f"Dataset initialized with {len(self.stems)} samples")
         
@@ -44,6 +61,7 @@ class FGFLOWDataset(Dataset):
         
     def __getitem__(self,idx:int):
         stem = self.stems[idx]
+        aug = self.transform_flags[idx]
         
         # Check if this stem exists in labels
         if stem not in self.labels:
@@ -73,14 +91,18 @@ class FGFLOWDataset(Dataset):
 
         ## standardize foreground masks to 0/1
         fg_stack = np.stack(fg_frames,axis=0).astype(np.float32)  # shape (seq_len,224,224)
-        fg_stack = fg_stack / 255.0
+        if fg_stack.max() > 1:
+            fg_stack = fg_stack / 255.0
         fg_stack = np.expand_dims(fg_stack, axis=1)  # shape (seq_len,1,224,224)
 
         ## flow clip to [-1,1]
         flow_stack = np.stack(flow_frames,axis=0).astype(np.float32)  # shape (seq_len,224,224,2)
         flow_stack = np.transpose(flow_stack, (0,3,1,2))  # shape (seq_len,2,224,224) (B,C,H,W)
         flow_stack = np.clip(flow_stack, -self.flow_clip, self.flow_clip) / self.flow_clip  # normalize to [-1,1]
-
+        
+        if aug and self.transform:
+            fg_stack, flow_stack = horizental_flip(fg_stack, flow_stack)
+        
         fg_tensors = torch.from_numpy(fg_stack)  # shape (seq_len,1,224,224)
         flow_tensors = torch.from_numpy(flow_stack)  # shape (seq_len,2,224,224)
         
@@ -98,7 +120,7 @@ class PatchEmbedding(nn.Module):
         return x 
 
 
-def transformer_encdoer_layer(d_model, nhead, mlp_ratio, depth,dropout=0.1):
+def transformer_encdoer_layer(d_model, nhead, mlp_ratio, depth,dropout=0.2):
     encoder_layer = nn.TransformerEncoderLayer(d_model=d_model, nhead=nhead,
                                                 dim_feedforward=int(d_model * mlp_ratio), dropout=dropout,
                                                 activation='gelu'
@@ -106,7 +128,7 @@ def transformer_encdoer_layer(d_model, nhead, mlp_ratio, depth,dropout=0.1):
     return nn.TransformerEncoder(encoder_layer, num_layers=depth)
 
 class TwoStreamTransformer(nn.Module):
-    def __init__(self,img_size=224,patch_size=32,fg_in_ch=1,flow_in_ch=2,d_model=64,depth=2,num_heads=8,mlp_ratio=2,dropout=0.1):
+    def __init__(self,img_size=224,patch_size=32,fg_in_ch=1,flow_in_ch=2,d_model=64,depth=2,num_heads=4,mlp_ratio=2,dropout=0.2):
         super().__init__()
         self.img_size = img_size
         self.patch_size = patch_size
@@ -131,7 +153,7 @@ class TwoStreamTransformer(nn.Module):
         self.classifier = nn.Sequential(
             nn.Linear(self.head_dim, self.head_dim // 2),
             nn.ReLU(),
-            nn.Dropout(dropout),
+            nn.Dropout(0.3),
             nn.Linear(self.head_dim // 2, 1)
         )
 
@@ -188,7 +210,6 @@ def collate_fn(batch):
 
 def train_one_epoch(model,dataloader,optimizer,device,criterion):
     model.train()
-    optimizer.zero_grad()
     total_loss = 0.0
     correct =0
     total = 0
@@ -198,10 +219,11 @@ def train_one_epoch(model,dataloader,optimizer,device,criterion):
     
     pbar = tqdm(dataloader,desc="Training")
     for fg_batch, flow_batch, labels in pbar:
+        optimizer.zero_grad()
+
         fg_batch   = fg_batch.to(device)
         flow_batch = flow_batch.to(device)
         labels     = labels.to(device)
-
         
         outputs = model(fg_batch, flow_batch)
         loss    = criterion(outputs, labels)
@@ -263,7 +285,7 @@ def validate(model,dataloader,device,criterion):
     avg_acc = correct / total
     cm = confusion_matrix(all_labels, all_preds)
     return avg_loss, avg_acc, precision, recall, f1,all_probs, all_labels,cm
-def plot_metrics(history, save_dir="./training_results"):
+def plot_metrics(history, save_dir="./training_aug_results"):
     os.makedirs(save_dir, exist_ok=True)
     
     epochs = range(1, len(history['train_loss']) + 1)
@@ -352,7 +374,7 @@ def plot_metrics(history, save_dir="./training_results"):
     
     print(f"\n All plots saved to {save_dir}")
 
-def save_training_history(history, save_dir="./training_results"):
+def save_training_history(history, save_dir="./training_aug_results"):
     os.makedirs(save_dir, exist_ok=True)
     
     # Save metrics as JSON (excluding numpy arrays)
@@ -444,8 +466,8 @@ if __name__ == "__main__":
     val_labels      = filter_by_stems(fg_fall_dir, fg_no_fall_dir, flow_fall_dir, flow_no_fall_dir, val_stems)
 
 
-    train_dataset    = FGFLOWDataset(fg_fall_dir,fg_no_fall_dir, flow_fall_dir,flow_no_fall_dir, train_labels)
-    val_dataset      = FGFLOWDataset(fg_fall_dir, fg_no_fall_dir, flow_fall_dir, flow_no_fall_dir, val_labels)     
+    train_dataset    = FGFLOWDataset(fg_fall_dir,fg_no_fall_dir, flow_fall_dir,flow_no_fall_dir, train_labels,transform=True)
+    val_dataset      = FGFLOWDataset(fg_fall_dir, fg_no_fall_dir, flow_fall_dir, flow_no_fall_dir, val_labels,transform=False)     
 
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, collate_fn=collate_fn,num_workers=4,pin_memory=True)
     val_loader   = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, collate_fn=collate_fn,num_workers=4,pin_memory=True)
@@ -486,10 +508,10 @@ if __name__ == "__main__":
     else:
         criterion = nn.BCEWithLogitsLoss()
     for epoch in range(epochs):
-        train_loss, train_acc, train_precision, train_recall, train_f1,train_probs, train_labels = train_one_epoch(
+        train_loss, train_acc, train_precision, train_recall, train_f1,_,_ = train_one_epoch(
                             model,train_loader,optimizer,device,criterion=criterion
                         )
-        val_loss, val_acc, val_precision, val_recall, val_f1, val_probs, val_labels, val_cm = validate(
+        val_loss, val_acc, val_precision, val_recall, val_f1, val_probs_epoch, val_labels_epoch, val_cm = validate(
                             model,val_loader,device,criterion=criterion
                         )   
         if scheduler:
@@ -507,8 +529,8 @@ if __name__ == "__main__":
         history['val_f1'].append(val_f1)
 
         if epoch == epochs - 1:
-            history['val_probs'].append(val_probs)
-            history['val_labels'].append(val_labels)
+            history['val_probs'].append(val_probs_epoch)
+            history['val_labels'].append(val_labels_epoch)
             history['val_confusion_matrix'].append(val_cm)
 
         # Print epoch summary
@@ -519,7 +541,7 @@ if __name__ == "__main__":
         # Save best model
         if val_acc > best_val_acc:
             best_val_acc = val_acc
-            torch.save(model.state_dict(), "best_two_stream_transformer.pth")
+            torch.save(model.state_dict(), "best_two_stream_transformer_aug.pth")
             print(f"Saved best model (Val Acc: {best_val_acc:.4f})")
 
     print("\n" + "="*50)
