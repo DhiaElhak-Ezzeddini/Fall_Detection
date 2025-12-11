@@ -120,7 +120,7 @@ class PatchEmbedding(nn.Module):
         return x 
 
 
-def transformer_encdoer_layer(d_model, nhead, mlp_ratio, depth,dropout=0.2):
+def transformer_encdoer_layer(d_model, nhead, mlp_ratio, depth,dropout=0.3):
     encoder_layer = nn.TransformerEncoderLayer(d_model=d_model, nhead=nhead,
                                                 dim_feedforward=int(d_model * mlp_ratio), dropout=dropout,
                                                 activation='gelu'
@@ -128,7 +128,7 @@ def transformer_encdoer_layer(d_model, nhead, mlp_ratio, depth,dropout=0.2):
     return nn.TransformerEncoder(encoder_layer, num_layers=depth)
 
 class TwoStreamTransformer(nn.Module):
-    def __init__(self,img_size=224,patch_size=32,fg_in_ch=1,flow_in_ch=2,d_model=64,depth=2,num_heads=4,mlp_ratio=2,dropout=0.2):
+    def __init__(self,img_size=224,patch_size=32,fg_in_ch=1,flow_in_ch=2,d_model=64,depth=1,num_heads=2,mlp_ratio=2,dropout=0.3):
         super().__init__()
         self.img_size = img_size
         self.patch_size = patch_size
@@ -153,7 +153,7 @@ class TwoStreamTransformer(nn.Module):
         self.classifier = nn.Sequential(
             nn.Linear(self.head_dim, self.head_dim // 2),
             nn.ReLU(),
-            nn.Dropout(0.3),
+            nn.Dropout(0.4),
             nn.Linear(self.head_dim // 2, 1)
         )
 
@@ -285,7 +285,7 @@ def validate(model,dataloader,device,criterion):
     avg_acc = correct / total
     cm = confusion_matrix(all_labels, all_preds)
     return avg_loss, avg_acc, precision, recall, f1,all_probs, all_labels,cm
-def plot_metrics(history, save_dir="./training_aug_results"):
+def plot_metrics(history, save_dir="./training_aug_2_results"):
     os.makedirs(save_dir, exist_ok=True)
     
     epochs = range(1, len(history['train_loss']) + 1)
@@ -374,7 +374,7 @@ def plot_metrics(history, save_dir="./training_aug_results"):
     
     print(f"\n All plots saved to {save_dir}")
 
-def save_training_history(history, save_dir="./training_aug_results"):
+def save_training_history(history, save_dir="./training_aug_2_results"):
     os.makedirs(save_dir, exist_ok=True)
     
     # Save metrics as JSON (excluding numpy arrays)
@@ -541,7 +541,7 @@ if __name__ == "__main__":
         # Save best model
         if val_acc > best_val_acc:
             best_val_acc = val_acc
-            torch.save(model.state_dict(), "best_two_stream_transformer_aug.pth")
+            torch.save(model.state_dict(), "best_two_stream_transformer_aug_2.pth")
             print(f"Saved best model (Val Acc: {best_val_acc:.4f})")
 
     print("\n" + "="*50)
@@ -549,7 +549,7 @@ if __name__ == "__main__":
     print("="*50)
     
     # Save history and generate plots
-    save_training_history(history)
-    plot_metrics(history)
+    save_training_history(history, save_dir="./training_aug_2_results")
+    plot_metrics(history, save_dir="./training_aug_2_results")
     
     print(f"\nBest Validation Accuracy: {best_val_acc:.4f}")
