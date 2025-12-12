@@ -50,7 +50,7 @@ class FGFLOWDataset(Dataset):
         for stem in labels.keys():
             self.stems.append(stem)
             self.transform_flags.append(False)  # original
-            if self.transform and random.random() < 0.5: 
+            if self.transform and random.random() < 0.8:  # 80% chance to add augmented version
                 self.stems.append(stem)
                 self.transform_flags.append(True)   # augmented    
         
@@ -128,7 +128,7 @@ def transformer_encdoer_layer(d_model, nhead, mlp_ratio, depth,dropout=0.3):
     return nn.TransformerEncoder(encoder_layer, num_layers=depth)
 
 class TwoStreamTransformer(nn.Module):
-    def __init__(self,img_size=224,patch_size=32,fg_in_ch=1,flow_in_ch=2,d_model=64,depth=1,num_heads=2,mlp_ratio=2,dropout=0.3):
+    def __init__(self,img_size=224,patch_size=64,fg_in_ch=1,flow_in_ch=2,d_model=64,depth=1,num_heads=4,mlp_ratio=2,dropout=0.3):
         super().__init__()
         self.img_size = img_size
         self.patch_size = patch_size
@@ -225,8 +225,10 @@ def train_one_epoch(model,dataloader,optimizer,device,criterion):
         flow_batch = flow_batch.to(device)
         labels     = labels.to(device)
         
+        
         outputs = model(fg_batch, flow_batch)
         loss    = criterion(outputs, labels)
+        
         loss.backward()
         optimizer.step()
     
@@ -421,8 +423,8 @@ if __name__ == "__main__":
     # create labels
     labels_csv = "./Processed_For_DL/labels.csv"
     batch_size = 16
-    epochs = 15
-    lr = 3e-4
+    epochs = 30
+    lr = 5e-4
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
 
@@ -469,8 +471,8 @@ if __name__ == "__main__":
     train_dataset    = FGFLOWDataset(fg_fall_dir,fg_no_fall_dir, flow_fall_dir,flow_no_fall_dir, train_labels,transform=True)
     val_dataset      = FGFLOWDataset(fg_fall_dir, fg_no_fall_dir, flow_fall_dir, flow_no_fall_dir, val_labels,transform=False)     
 
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, collate_fn=collate_fn,num_workers=4,pin_memory=True)
-    val_loader   = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, collate_fn=collate_fn,num_workers=4,pin_memory=True)
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, collate_fn=collate_fn,num_workers=6,pin_memory=False)
+    val_loader   = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, collate_fn=collate_fn,num_workers=6,pin_memory=False)
 
     model = TwoStreamTransformer().to(device)
     optimizer = optim.AdamW(model.parameters(), lr=lr,weight_decay=0.05) 
@@ -507,6 +509,7 @@ if __name__ == "__main__":
         print(f"  Using pos_weight={pos_weight.item():.2f} for BCEWithLogitsLoss")
     else:
         criterion = nn.BCEWithLogitsLoss()
+ 
     for epoch in range(epochs):
         train_loss, train_acc, train_precision, train_recall, train_f1,_,_ = train_one_epoch(
                             model,train_loader,optimizer,device,criterion=criterion
@@ -541,7 +544,7 @@ if __name__ == "__main__":
         # Save best model
         if val_acc > best_val_acc:
             best_val_acc = val_acc
-            torch.save(model.state_dict(), "best_two_stream_transformer_aug_2.pth")
+            torch.save(model.state_dict(), "best_two_stream_transformer_aug_3.pth")
             print(f"Saved best model (Val Acc: {best_val_acc:.4f})")
 
     print("\n" + "="*50)
@@ -549,7 +552,7 @@ if __name__ == "__main__":
     print("="*50)
     
     # Save history and generate plots
-    save_training_history(history, save_dir="./training_aug_2_results")
-    plot_metrics(history, save_dir="./training_aug_2_results")
+    save_training_history(history, save_dir="./training_aug_3_results")
+    plot_metrics(history, save_dir="./training_aug_3_results")
     
     print(f"\nBest Validation Accuracy: {best_val_acc:.4f}")
