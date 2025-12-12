@@ -1,0 +1,10 @@
+Final Classification Report (Last Epoch)
+==================================================
+              precision    recall  f1-score   support
+
+     No Fall       0.90      0.85      0.87       795
+        Fall       0.81      0.88      0.84       602
+
+    accuracy                           0.86      1397
+   macro avg       0.86      0.86      0.86      1397
+weighted avg       0.86      0.86      0.86      1397
