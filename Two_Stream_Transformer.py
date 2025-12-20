@@ -23,6 +23,29 @@ def horizental_flip(fg, flow):
     flow_flipped[:,0,:,:] *= -1  # invert x-direction flow
     return fg_flipped, flow_flipped
 
+def temporal_jitter(fg, flow, max_jitter=5):
+    """
+    Temporal jitter by shifting sequence and padding.
+    fg:   (T, 1, H, W)
+    flow: (T, 2, H, W)
+    """
+    jitter = random.randint(-max_jitter, max_jitter)
+
+    if jitter > 0:
+        fg = np.concatenate([fg[jitter:], fg[-1:].repeat(jitter, axis=0)], axis=0)
+        flow = np.concatenate([flow[jitter:], flow[-1:].repeat(jitter, axis=0)], axis=0)
+
+    elif jitter < 0:
+        fg = np.concatenate([fg[:1].repeat(-jitter, axis=0), fg[:jitter]], axis=0)
+        flow = np.concatenate([flow[:1].repeat(-jitter, axis=0), flow[:jitter]], axis=0)
+
+    return fg, flow
+
+def flow_noise(flow, sigma=0.02):
+    noise = np.random.normal(0,sigma,flow.shape).astype(np.float32)
+    return np.clip(flow + noise, -1.0, 1.0)
+
+
 class FGFLOWDataset(Dataset):
     """
     Dataset for loading foreground masks and optical flow data.
@@ -42,9 +65,10 @@ class FGFLOWDataset(Dataset):
         self.transform = transform
 
         # Only use stems that are in the labels dict
-        #self.stems = list(labels.keys())
+        self.stems = list(labels.keys())
 
         self.transform = transform
+        """
         self.stems = []
         self.transform_flags = []
         for stem in labels.keys():
@@ -52,8 +76,8 @@ class FGFLOWDataset(Dataset):
             self.transform_flags.append(False)  # original
             if self.transform and random.random() < 0.8:  # 80% chance to add augmented version
                 self.stems.append(stem)
-                self.transform_flags.append(True)   # augmented    
-        
+                self.transform_flags.append(True)   # augmented   
+        """
         print(f"Dataset initialized with {len(self.stems)} samples")
         
     def __len__(self):
@@ -61,7 +85,6 @@ class FGFLOWDataset(Dataset):
         
     def __getitem__(self,idx:int):
         stem = self.stems[idx]
-        aug = self.transform_flags[idx]
         
         # Check if this stem exists in labels
         if stem not in self.labels:
@@ -101,7 +124,19 @@ class FGFLOWDataset(Dataset):
         flow_stack = np.clip(flow_stack, -self.flow_clip, self.flow_clip) / self.flow_clip  # normalize to [-1,1]
         
         if aug and self.transform:
-            fg_stack, flow_stack = horizental_flip(fg_stack, flow_stack)
+            fg_flipped, flow_flipped   = horizental_flip(fg_stack, flow_stack)
+            fg_jittered, flow_jittered = temporal_jitter(fg_flipped, flow_flipped, max_jitter=5)
+        fg_stack = fg_stack.append(fg_jittered) 
+        flow_stack = flow_stack.append(flow_jittered) 
+        if self.transform:
+            if random.random() < 0.5:
+                fg_stack, flow_stack = horizental_flip(fg_stack, flow_stack)
+
+            if random.random() < 0.5:
+                fg_stack, flow_stack = temporal_jitter(fg_stack, flow_stack, max_jitter=5)
+
+            if random.random() < 0.2:
+                flow_stack = flow_noise(flow_stack)
         
         fg_tensors = torch.from_numpy(fg_stack)  # shape (seq_len,1,224,224)
         flow_tensors = torch.from_numpy(flow_stack)  # shape (seq_len,2,224,224)
