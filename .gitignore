@@ -4,6 +4,6 @@ Working_Directory/
 __pycache__/
 *.pyc
 *.pt 
-*.pth
 *.mp4
 Processed*
+*_4_1.pth
