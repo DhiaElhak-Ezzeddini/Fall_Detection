@@ -14,7 +14,7 @@ def fix_duplicate_filenames():
     # Read CSV
     df = pd.read_csv(labels_csv)
     print(f"Total rows in CSV: {len(df)}")
-    
+     
     # Find duplicates
     duplicates = df[df.duplicated(subset=['filename'], keep=False)].sort_values('filename')
     
