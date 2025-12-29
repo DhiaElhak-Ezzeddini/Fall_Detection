@@ -1,0 +1,37 @@
+# Minimal requirements inferred from project imports
+# Other packages are listed below; install torch separately to match your CUDA setup.
+numpy
+pandas
+scikit-learn
+matplotlib
+tqdm
+opencv-python
+moviepy
+
+# PyTorch (torch) installation guidance
+# ------------------------------------
+# IMPORTANT: Install PyTorch separately so you can pick a wheel built for your CUDA
+# version. Do NOT rely on a plain 'torch' line in this file if you need CUDA support.
+# Examples (run one matching your environment):
+# - CPU-only:
+#     pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+# - CUDA 12.1:
+#     pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
+# - CUDA 11.8:
+#     pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
+# - CUDA 11.7:
+#     pip install torch torchvision --index-url https://download.pytorch.org/whl/cu117
+# For other options (conda, different CUDA versions), follow the official guide:
+# https://pytorch.org/get-started/locally/
+
+# System dependencies:
+# - moviepy requires ffmpeg available on PATH (install via your package manager e.g. apt / yum / brew)# Minimal requirements inferred from project imports
+# Pin versions as appropriate for your environment.
+torch
+numpy
+pandas
+scikit-learn
+matplotlib
+tqdm
+opencv-python
+moviepy
